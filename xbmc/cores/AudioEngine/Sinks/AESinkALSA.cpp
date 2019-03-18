@@ -1130,6 +1130,10 @@ void CAESinkALSA::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
     char *io = snd_device_name_get_hint(*hint, "IOID");
     char *name = snd_device_name_get_hint(*hint, "NAME");
     char *desc = snd_device_name_get_hint(*hint, "DESC");
+
+    CLog::Log(LOGDEBUG, "CAESinkALSA::EnumerateDevicesEx: got id=%s name=%s desc=%s",
+      io, name, desc);
+
     if ((!io || strcmp(io, "Output") == 0) && name
         && strcmp(name, "null") != 0)
     {
@@ -1139,16 +1143,22 @@ void CAESinkALSA::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
       if (strcmp(name, "default") == 0)
       {
         /* added already, but lets get the description if we have one */
-        if (desc)
+        if (desc) {
           defaultDescription = desc;
+          CLog::Log(LOGDEBUG, "CAESinkALSA::EnumerateDevicesEx: set defaultDescription to %s", desc);
+        }
       }
       else if (baseName == "front")
       {
         /* Enumerate using the surroundXX mangling */
         /* do not enumerate basic "front", it is already handled
          * by the default "@" entry added in the very beginning */
-        if (strcmp(name, "front") != 0)
+        if (strcmp(name, "front") != 0) {
           EnumerateDevice(list, std::string("@") + (name+5), desc ? desc : name, config);
+          CLog::Log(LOGDEBUG, "CAESinkALSA::EnumerateDevicesEx: enumerated front device %s name %s desc %s", std::string("@") + (name+5), name, desc ? desc : name);
+        } else {
+          CLog::Log(LOGDEBUG, "CAESinkALSA::EnumerateDevicesEx: skipped front device %s", name);
+        }
       }
 
       /* Do not enumerate "default", it is already enumerated above. */
@@ -1177,6 +1187,9 @@ void CAESinkALSA::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
             && baseName != "dsnoop")
       {
         EnumerateDevice(list, name, desc ? desc : name, config);
+        CLog::Log(LOGDEBUG, "CAESinkALSA::EnumerateDevicesEx: enumerated device name %s desc %s", name, desc ? desc : name);
+      } else {
+        CLog::Log(LOGDEBUG, "CAESinkALSA::EnumerateDevicesEx: skipped default/hw/... device %s", name);
       }
     }
     free(io);
