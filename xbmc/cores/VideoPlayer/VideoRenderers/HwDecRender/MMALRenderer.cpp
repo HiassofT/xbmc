@@ -1060,6 +1060,7 @@ void CMMALRenderer::RenderUpdate(int index, int index2, bool clear, unsigned int
 
 exit:
    lock.Leave();
+#if 0
    uint32_t v = g_RBP.WaitVsync(m_vsync_count);
    // allow a frame of slop
    if (m_vsync_count == ~0U || !(v == m_vsync_count))
@@ -1068,6 +1069,7 @@ exit:
      m_vsync_count = v + 1;
    }
    else
+#endif
      m_vsync_count++;
 }
 
