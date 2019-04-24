@@ -34,8 +34,9 @@ public:
   bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
   void PresentRender(bool rendered, bool videoLayer) override;
 protected:
-  void SetVSyncImpl(bool enable) override;
-  virtual std::unique_ptr<CVideoSync> GetVideoSync(void *clock) override;
+  void SetVSyncImpl(bool enable) override { return; };
+  //void SetVSyncImpl(bool enable) override;
+  //virtual std::unique_ptr<CVideoSync> GetVideoSync(void *clock) override;
   void PresentRenderImpl(bool rendered) override {};
   bool CreateContext() override;
 };

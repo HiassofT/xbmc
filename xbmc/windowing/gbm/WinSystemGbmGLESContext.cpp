@@ -133,6 +133,7 @@ bool CWinSystemGbmGLESContext::CreateContext()
   return true;
 }
 
+#if 0
 std::unique_ptr<CVideoSync> CWinSystemGbmGLESContext::GetVideoSync(void *clock)
 {
   std::unique_ptr<CVideoSync> pVSync(new CVideoSyncPi(clock));
@@ -146,3 +147,5 @@ void CWinSystemGbmGLESContext::SetVSyncImpl(bool enable)
     CLog::Log(LOGERROR, "%s,Could not set egl vsync", __FUNCTION__);
   }
 }
+#endif
+
