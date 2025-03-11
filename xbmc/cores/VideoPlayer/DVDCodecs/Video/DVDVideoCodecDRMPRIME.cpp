@@ -761,7 +761,21 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, AVPixelForma
 
   memset(par, 0, sizeof(*par));
   par->format = AV_PIX_FMT_NONE;
-  par->hw_frames_ctx = m_pFrame->hw_frames_ctx;
+
+  if (pix_fmt == AV_PIX_FMT_DRM_PRIME)
+  {
+    if (av_hwdevice_ctx_create(&m_hw_device_ref, AV_HWDEVICE_TYPE_DRM, NULL, NULL, 0) < 0) {
+        CLog::Log(LOGERROR, "Failed to create DRM device");
+        return false;
+    }
+    m_hw_frames_ref = av_hwframe_ctx_alloc(m_hw_device_ref);
+    if (!m_hw_frames_ref) {
+      CLog::Log(LOGERROR, "Failed to allocate hwframe context");
+        av_buffer_unref(&m_hw_device_ref);
+        return false;
+    }
+    par->hw_frames_ctx = av_buffer_ref(m_hw_frames_ref);
+  }
 
   result = av_buffersrc_parameters_set(m_pFilterIn, par);
   if (result < 0)
@@ -862,6 +876,8 @@ void CDVDVideoCodecDRMPRIME::FilterClose()
     m_pFilterIn = nullptr;
     m_pFilterOut = nullptr;
     m_pFilterGraph = nullptr;
+    av_buffer_unref(&m_hw_frames_ref);
+    av_buffer_unref(&m_hw_device_ref);
   }
 }
 

@@ -64,4 +64,6 @@ protected:
   AVFilterContext* m_pFilterIn = nullptr;
   AVFilterContext* m_pFilterOut = nullptr;
   std::shared_ptr<IVideoBufferPool> m_videoBufferPool;
+  AVBufferRef *m_hw_device_ref = nullptr;
+  AVBufferRef *m_hw_frames_ref = nullptr;
 };
