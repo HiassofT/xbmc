@@ -387,8 +387,8 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
 
   UpdateProcessInfo(m_pCodecContext, m_pCodecContext->pix_fmt);
   m_processInfo.SetVideoInterlaced(false);
-  m_processInfo.SetVideoDAR(hints.aspect);
   m_processInfo.SetVideoDeintMethod("none");
+  m_processInfo.SetVideoDAR(hints.aspect);
 
   m_checkedDeinterlace = false;
 
@@ -723,32 +723,10 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, AVPixelForma
     return false;
   }
 
-  const AVFilter* srcFilter = avfilter_get_by_name("buffer");
-  const AVFilter* outFilter = avfilter_get_by_name("buffersink");
-
-  std::string args = StringUtils::Format("video_size={}x{}:pix_fmt={}:time_base={}/{}:"
-                                         "pixel_aspect={}/{}",
-                                         m_pCodecContext->width,
-                                         m_pCodecContext->height,
-                                         pix_fmt,
-                                         m_pCodecContext->time_base.num ?
-                                           m_pCodecContext->time_base.num : 1,
-                                         m_pCodecContext->time_base.num ?
-                                           m_pCodecContext->time_base.den : 1,
-                                         m_pCodecContext->sample_aspect_ratio.num != 0 ?
-                                           m_pCodecContext->sample_aspect_ratio.num : 1,
-                                         m_pCodecContext->sample_aspect_ratio.num != 0 ?
-                                           m_pCodecContext->sample_aspect_ratio.den : 1);
-
-  result = avfilter_graph_create_filter(&m_pFilterIn, srcFilter, "src",
-                                        args.c_str(), NULL, m_pFilterGraph);
-  if (result < 0)
+  m_pFilterIn = avfilter_graph_alloc_filter(m_pFilterGraph, avfilter_get_by_name("buffer"), "in");
+  if (m_pFilterIn == NULL)
   {
-    char err[AV_ERROR_MAX_STRING_SIZE] = {};
-    av_strerror(result, err, AV_ERROR_MAX_STRING_SIZE);
-    CLog::Log(LOGERROR,
-              "CDVDVideoCodecDRMPRIME::FilterOpen - avfilter_graph_create_filter: src: {} ({})",
-              err, result);
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - avfilter_graph_create_filter: failed to create in graph");
     return false;
   }
 
@@ -760,7 +738,15 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, AVPixelForma
   }
 
   memset(par, 0, sizeof(*par));
-  par->format = AV_PIX_FMT_NONE;
+  par->format = pix_fmt;
+  par->width = m_pCodecContext->width;
+  par->height = m_pCodecContext->height;
+#if LIBAVFILTER_BUILD >= AV_VERSION_INT(10, 1, 100)
+  par->color_range = m_pCodecContext->color_range;
+  par->color_space = m_pCodecContext->colorspace;
+#endif
+  par->time_base = m_pCodecContext->time_base;
+  par->sample_aspect_ratio = m_pCodecContext->sample_aspect_ratio;
 
   if (pix_fmt == AV_PIX_FMT_DRM_PRIME)
   {
@@ -789,25 +775,41 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, AVPixelForma
   }
   av_freep(&par);
 
-  result = avfilter_graph_create_filter(&m_pFilterOut, outFilter, "out",
-                                        NULL, NULL, m_pFilterGraph);
+  result = avfilter_init_dict(m_pFilterIn, NULL);
   if (result < 0)
   {
-    char err[AV_ERROR_MAX_STRING_SIZE] = {};
-    av_strerror(result, err, AV_ERROR_MAX_STRING_SIZE);
-    CLog::Log(LOGERROR,
-              "CDVDVideoCodecDRMPRIME::FilterOpen - avfilter_graph_create_filter: out: {} ({})",
-              err, result);
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - Failed to init in dict (%d)", result);
+    return false;
+  }
+
+  m_pFilterOut = avfilter_graph_alloc_filter(m_pFilterGraph, avfilter_get_by_name("buffersink"), "out");
+  if (m_pFilterOut == NULL)
+  {
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - avfilter_graph_create_filter: failed to create out graph");
     return false;
   }
 
   enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
+#if LIBAVFILTER_BUILD >= AV_VERSION_INT(10, 6, 100)
+  result = av_opt_set_array(m_pFilterOut, "pixel_formats",
+                          AV_OPT_SEARCH_CHILDREN | AV_OPT_ARRAY_REPLACE,
+                          0, sizeof(pix_fmts)/sizeof(pix_fmts[0]) - 1,
+                          AV_OPT_TYPE_PIXEL_FMT, pix_fmts);
+#else
   result = av_opt_set_int_list(m_pFilterOut, "pix_fmts", &pix_fmts[0],
                                AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+#endif
   if (result < 0)
   {
-    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - failed settings pix formats");
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - failed settings pix formats (%d)", result);
     return false;
+  }
+
+  result = avfilter_init_dict(m_pFilterOut, NULL);
+  if (result < 0)
+  {
+      CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - Failed to init out dict (%d)", result);
+      return false;
   }
 
   if ((result = av_buffersink_set_alloc_video_frame(m_pFilterOut, alloc_filter_frame, static_cast<void*>(this))) < 0)
@@ -1008,8 +1010,8 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
   {
     char err[AV_ERROR_MAX_STRING_SIZE] = {};
     av_strerror(ret, err, AV_ERROR_MAX_STRING_SIZE);
-    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - receive frame failed: {} ({})",
-              __FUNCTION__, err, ret);
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - receive frame failed: {} ({})", __FUNCTION__,
+              err, ret);
     return VC_ERROR;
   }
 
