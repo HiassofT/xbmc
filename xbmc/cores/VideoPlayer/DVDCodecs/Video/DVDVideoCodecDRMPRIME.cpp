@@ -1028,10 +1028,10 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     m_checkedDeinterlace = true;
   }
 
-  if (!m_processInfo.GetVideoInterlaced() && !!(m_pFrame->flags & AV_FRAME_FLAG_INTERLACED))
+  if (!m_processInfo.GetVideoInterlaced() && (m_pFrame->flags & AV_FRAME_FLAG_INTERLACED))
     m_processInfo.SetVideoInterlaced(true);
 
-  std::string filterChain = GetFilterChain(!!(m_pFrame->flags & AV_FRAME_FLAG_INTERLACED));
+  std::string filterChain = GetFilterChain(m_pFrame->flags & AV_FRAME_FLAG_INTERLACED);
 
   // we need to scale if the buffer isn't in DRM_PRIME format
   if (!IsSupportedSwFormat(pix_fmt) && !IsSupportedHwFormat(pix_fmt))
